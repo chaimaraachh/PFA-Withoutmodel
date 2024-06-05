@@ -1,0 +1,90 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: memory-simulation
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memory-simulation-deploy-${i}
+  namespace: memory-simulation
+  labels:
+    app: memory-simulation-${i}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: memory-simulation-pod-${i}
+  template:
+    metadata:
+      name: memory-simulation-pod-${i}
+      labels:
+        app: memory-simulation-pod-${i}
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '3000'
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: ${NODE_NAME}
+      containers:
+        - name: memory-simulation-container
+          image: "memory-simulation-${i}:1.0.${i}"
+          env:
+          - name: NAMESPACE
+            value: "memory-simulation"
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: SEED
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.uid
+          ports:
+            - containerPort: 3000
+          resources:
+            requests:
+              memory: "12Mi"
+              cpu: "20m"
+            limits:
+              memory: "24Mi"
+              cpu: "80m"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: memory-simulation-service-${i}
+  namespace: memory-simulation
+  labels:
+    app: memory-simulation-${i}
+spec:
+  ports:
+    - port: 3000
+      targetPort: 3000
+  selector:
+    app: memory-simulation-pod-${i}
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: memory-simulation-ingress-${i}
+  namespace: memory-simulation
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: localhost
+      http:
+        paths:
+          - path: /service-${i}
+            pathType: Prefix
+            backend:
+              service:
+                name: memory-simulation-service-${i}
+                port:
+                  number: 3000
